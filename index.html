@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Escáner MCO - Asistencia</title>
+  <!-- Librería ligera para escanear códigos de barras y QR -->
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #F4FBF7; color: #1A3325; margin: 0; padding: 16px; display: flex; justify-content: center; }
+    .wrap { max-width: 480px; width: 100%; }
+    .card { background: #ffffff; border-radius: 16px; padding: 20px; box-shadow: 0 4px 15px rgba(0,102,51,0.08); border: 1px solid #E6F5ED; }
+    h1 { font-size: 22px; margin: 0 0 8px; color: #006633; text-align: center; }
+    p { color: #456653; font-size: 14px; text-align: center; margin-bottom: 20px; }
+    button { width: 100%; padding: 14px; border-radius: 10px; border: none; font-size: 16px; font-weight: 700; cursor: pointer; background: #006633; color: #fff; transition: background 0.2s; }
+    button:hover { background: #004d26; }
+    #reader { width: 100%; margin: 18px 0; border-radius: 12px; overflow: hidden; background: #000; }
+    .status { margin-top: 15px; padding: 14px; border-radius: 10px; background: #E6F5ED; color: #004d26; font-size: 15px; text-align: center; font-weight: 600; }
+    .danger { background: #FFEBEE !important; color: #C62828 !important; }
+    .ok { background: #E8F5E9 !important; color: #2E7D32 !important; }
+    .warn { background: #FFF3E0 !important; color: #EF6C00 !important; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Escáner MCO</h1>
+      <p>Apunta con la cámara al código de barras del carné del alumno.</p>
+      
+      <button id="btnStart" type="button">📹 Activar cámara</button>
+      <div id="reader"></div>
+      <div id="status" class="status">Pulsa "Activar cámara" para iniciar.</div>
+    </div>
+  </div>
+
+  <script>
+    // ⚠️ REEMPLAZA ESTA URL CON LA "URL DE APLICACIÓN WEB" DE TU GOOGLE APPS SCRIPT (MCO)
+    const APPS_SCRIPT_URL = 'PEGA_AQUI_TU_URL_DE_APPS_SCRIPT';
+
+    let html5QrCode = null;
+    let lastScan = { text: '', time: 0 };
+    let isRegistering = false;
+
+    function setStatus(msg, type) {
+      const el = document.getElementById('status');
+      el.textContent = msg;
+      el.className = 'status ' + (type || '');
+    }
+
+    function isDuplicate(text) {
+      const now = Date.now();
+      if (lastScan.text === text && (now - lastScan.time) < 4000) return true;
+      lastScan = { text, time: now };
+      return false;
+    }
+
+    async function stopScanner() {
+      if (!html5QrCode) return;
+      try { await html5QrCode.stop(); } catch(e) {}
+      try { await html5QrCode.clear(); } catch(e) {}
+      html5QrCode = null;
+    }
+
+    async function startScanner() {
+      try {
+        setStatus('Solicitando permiso de cámara...', 'warn');
+        await stopScanner();
+        html5QrCode = new Html5Qrcode('reader');
+        
+        // Configuración para usar preferentemente la cámara trasera del móvil
+        await html5QrCode.start(
+          { facingMode: 'environment' },
+          { fps: 10, qrbox: { width: 280, height: 140 } },
+          onScanSuccess,
+          function(){}
+        );
+        setStatus('Escaneando... enfoca el código.', 'ok');
+      } catch (error) {
+        setStatus('No se pudo activar la cámara: Asegúrate de dar permisos en Safari/Chrome.', 'danger');
+      }
+    }
+
+    // Comunicación segura JSONP para registrar directamente en Google Sheets
+    function registrarPorJsonp(id) {
+      return new Promise((resolve, reject) => {
+        const callbackName = 'qrCallback_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+        const script = document.createElement('script');
+        const timeout = setTimeout(() => {
+          cleanup();
+          reject(new Error('Tiempo de espera agotado al registrar.'));
+        }, 12000);
+
+        function cleanup() {
+          clearTimeout(timeout);
+          if (script.parentNode) script.parentNode.removeChild(script);
+          delete window[callbackName];
+        }
+
+        window[callbackName] = function(response) {
+          cleanup();
+          resolve(response);
+        };
+
+        script.onerror = function() {
+          cleanup();
+          reject(new Error('No se pudo contactar con Google Sheets.'));
+        };
+
+        script.src = APPS_SCRIPT_URL +
+          '?page=registrar_jsonp' +
+          '&id=' + encodeURIComponent(id) +
+          '&callback=' + encodeURIComponent(callbackName);
+
+        document.body.appendChild(script);
+      });
+    }
+
+    async function onScanSuccess(decodedText) {
+      if (isRegistering || isDuplicate(decodedText)) return;
+      isRegistering = true;
+      const id = decodedText.trim();
+      setStatus('Código detectado: ' + id + '. Registrando...', 'warn');
+      await stopScanner();
+
+      try {
+        const response = await registrarPorJsonp(id);
+        if (response && response.exito) {
+          setStatus(`✅ ¡Asiste registrado!\n${response.nombre}`, 'ok');
+          playBeep();
+        } else {
+          setStatus((response && response.mensaje) || 'No se pudo registrar.', 'danger');
+        }
+      } catch (error) {
+        setStatus(error.message || 'Error al registrar.', 'danger');
+      }
+
+      isRegistering = false;
+      // Reactiva la cámara automáticamente tras 1.8 segundos para el siguiente alumno
+      setTimeout(() => { startScanner(); }, 1800);
+    }
+
+    function playBeep() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(800, ctx.currentTime);
+        osc.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.1);
+      } catch(e) {}
+    }
+
+    document.getElementById('btnStart').addEventListener('click', startScanner);
+    window.addEventListener('beforeunload', function(){ stopScanner(); });
+  </script>
+</body>
+</html>
