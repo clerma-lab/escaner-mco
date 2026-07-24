@@ -18,9 +18,12 @@
     .danger { background: #FFEBEE !important; color: #C62828 !important; }
     .ok { background: #E8F5E9 !important; color: #2E7D32 !important; }
     .warn { background: #FFF3E0 !important; color: #EF6C00 !important; }
-    /* Estilo para el contador */
     .counter-box { margin-top: 15px; text-align: center; font-size: 18px; font-weight: bold; color: #006633; padding: 10px; border: 2px dashed #00994D; border-radius: 10px; background: #F9FFF6; }
     .counter-number { font-size: 24px; color: #2E7D32; }
+    
+    /* Botón Volver */
+    .btn-volver { margin-top: 15px; background: #E6F5ED; color: #006633; border: 2px solid #006633; }
+    .btn-volver:hover { background: #D1E6DA; }
   </style>
 </head>
 <body>
@@ -32,12 +35,14 @@
       <button id="btnStart" type="button">📹 Activar cámara</button>
       <div id="reader"></div>
       
-      <!-- Contador de escaneos exitosos -->
       <div class="counter-box">
         Registrados ahora: <span id="scan-count" class="counter-number">0</span>
       </div>
 
       <div id="status" class="status">Pulsa "Activar cámara" para iniciar.</div>
+
+      <!-- NUEVO BOTÓN VOLVER -->
+      <button type="button" class="btn-volver" onclick="cerrarPestana()">🔙 Volver a la App</button>
     </div>
   </div>
 
@@ -48,9 +53,8 @@
     let html5QrCode = null;
     let lastScan = { text: '', time: 0 };
     let isRegistering = false;
-    let scanCount = 0; // Variable del contador
+    let scanCount = 0; 
 
-    // Capturamos los parámetros que envía la app (grupo, fecha, sesion)
     const urlParams = new URLSearchParams(window.location.search);
     const paramGrupo = urlParams.get('grupo') || '';
     const paramFecha = urlParams.get('fecha') || '';
@@ -79,7 +83,7 @@
     async function startScanner() {
       try {
         setStatus('Solicitando permiso de cámara...', 'warn');
-        await Html5Qrcode.getCameras(); // Truco para desbloquear iOS
+        await Html5Qrcode.getCameras(); 
         await stopScanner();
         html5QrCode = new Html5Qrcode('reader');
         
@@ -139,8 +143,8 @@
         const response = await registrarPorJsonp(id);
         if (response && response.exito) {
           setStatus(`✅ ¡Asiste registrado!\n${response.nombre}`, 'ok');
-          scanCount++; // Sumamos al contador
-          document.getElementById('scan-count').innerText = scanCount; // Actualizamos pantalla
+          scanCount++; 
+          document.getElementById('scan-count').innerText = scanCount; 
           playBeep();
         } else {
           setStatus((response && response.mensaje) || 'No se pudo registrar.', 'danger');
@@ -160,6 +164,16 @@
         osc.type = 'sine'; osc.frequency.setValueAtTime(800, ctx.currentTime);
         osc.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.1);
       } catch(e) {}
+    }
+
+    function cerrarPestana() {
+      // Intenta cerrar la pestaña
+      window.close();
+      
+      // Si a los 500ms sigue abierta (Safari a veces bloquea el cierre), avisa al usuario
+      setTimeout(() => {
+        alert("En tu iPhone, debes cerrar esta pestaña manualmente desde el gestor de pestañas (los dos cuadrados superpuestos abajo a la derecha) para volver a la app de MCO.");
+      }, 500);
     }
 
     document.getElementById('btnStart').addEventListener('click', startScanner);
