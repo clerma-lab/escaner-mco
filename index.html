@@ -11,8 +11,13 @@
     .card { background: #ffffff; border-radius: 16px; padding: 20px; box-shadow: 0 4px 15px rgba(0,102,51,0.08); border: 1px solid #E6F5ED; }
     h1 { font-size: 22px; margin: 0 0 8px; color: #006633; text-align: center; }
     p { color: #456653; font-size: 14px; text-align: center; margin-bottom: 20px; }
+    
+    .btn-group { display: flex; gap: 10px; margin-bottom: 15px; }
     button { width: 100%; padding: 14px; border-radius: 10px; border: none; font-size: 16px; font-weight: 700; cursor: pointer; background: #006633; color: #fff; transition: background 0.2s; }
     button:hover { background: #004d26; }
+    .btn-secondary { background: transparent; border: 2px solid #006633; color: #006633; }
+    .btn-secondary:hover { background: #E6F5ED; }
+
     #reader { width: 100%; margin: 18px 0; border-radius: 12px; overflow: hidden; background: #000; }
     .status { margin-top: 15px; padding: 14px; border-radius: 10px; background: #E6F5ED; color: #004d26; font-size: 15px; text-align: center; font-weight: 600; }
     .danger { background: #FFEBEE !important; color: #C62828 !important; }
@@ -26,7 +31,11 @@
       <h1 id="titulo-escaner">Escáner MCO</h1>
       <p id="info-escaner">Apunta con la cámara al código de barras del carné del alumno.</p>
       
-      <button id="btnStart" type="button">📹 Activar cámara</button>
+      <div class="btn-group">
+        <button id="btnStart" type="button" style="flex: 2;">📹 Activar cámara</button>
+        <button id="btnVolver" type="button" class="btn-secondary" style="flex: 1;" onclick="volverAApp()">↩️ Volver</button>
+      </div>
+
       <div id="reader"></div>
       <div id="status" class="status">Pulsa "Activar cámara" para iniciar.</div>
     </div>
@@ -48,6 +57,21 @@
     let html5QrCode = null;
     let lastScan = { text: '', time: 0 };
     let isRegistering = false;
+
+    function volverAApp() {
+        stopScanner().then(() => {
+            // Intenta cerrar la pestaña primero
+            window.close();
+            // Si el navegador bloquea el cierre por seguridad, redirige de vuelta a Apps Script
+            setTimeout(() => {
+                if (APPS_SCRIPT_URL && !APPS_SCRIPT_URL.includes('PEGA_AQUI')) {
+                    window.location.href = APPS_SCRIPT_URL;
+                } else {
+                    alert("Cierra esta pestaña manualmente para volver a la app.");
+                }
+            }, 300);
+        });
+    }
 
     function setStatus(msg, type) { const el = document.getElementById('status'); el.textContent = msg; el.className = 'status ' + (type || ''); }
     function isDuplicate(text) { const now = Date.now(); if (lastScan.text === text && (now - lastScan.time) < 4000) return true; lastScan = { text, time: now }; return false; }
