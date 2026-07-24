@@ -86,11 +86,24 @@
     async function startScanner() {
       try {
         setStatus('Solicitando permiso de cámara...', 'warn');
+        
+        // 💡 LA SOLUCIÓN: Forzamos a iOS a enumerar las cámaras primero. 
+        // Esto destraba los permisos en la primera pulsación.
+        await Html5Qrcode.getCameras();
+        
         await stopScanner();
         html5QrCode = new Html5Qrcode('reader');
-        await html5QrCode.start( { facingMode: 'environment' }, { fps: 10, qrbox: { width: 280, height: 140 } }, onScanSuccess, function(){} );
+        
+        await html5QrCode.start( 
+            { facingMode: 'environment' }, 
+            { fps: 10, qrbox: { width: 280, height: 140 } }, 
+            onScanSuccess, 
+            function(){} // Función vacía para ignorar los fallos de fotogramas sin código
+        );
         setStatus('Escaneando... enfoca el código.', 'ok');
-      } catch (error) { setStatus('Error de cámara. Asegúrate de dar permisos.', 'danger'); }
+      } catch (error) { 
+        setStatus('Error de cámara. Asegúrate de dar permisos.', 'danger'); 
+      }
     }
 
     function registrarPorJsonp(id) {
